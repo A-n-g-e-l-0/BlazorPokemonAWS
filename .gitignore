@@ -2,6 +2,9 @@
 # Este archivo .gitignore ha sido creado automáticamente por Microsoft(R) Visual Studio.
 ################################################################################
 
-/.vs/PokemonApi.Lambda/FileContentIndex
-/.vs/PokemonApi.Lambda/CopilotIndices/17.14.1231.31060
-/.vs/PokemonApi.Lambda/DesignTimeBuild
+# Visual Studio
+.vs/
+
+# Build outputs
+obj/
+bin/
