@@ -2,18 +2,25 @@ using Amazon.Lambda.Core;
 using Amazon.Lambda.RuntimeSupport;
 using Amazon.Lambda.Serialization.SystemTextJson;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.DependencyInjection;
+using Refit;
+using PokemonBuscador.Cliente.Services;
 
 namespace PokemonApi.Lambda;
 
 public class Function
 {
-    /// <summary>
-    /// The main entry point for the Lambda function. The main function is called once during the Lambda init phase. It
-    /// initializes the .NET Lambda runtime client passing in the function handler to invoke for each Lambda event and
-    /// the JSON serializer to use for converting Lambda JSON format to the .NET types. 
-    /// </summary>
+    private static IPokeApiClient _pokeApiClient;
+
     private static async Task Main()
     {
+        var services = new ServiceCollection();
+        services.AddRefitClient<IPokeApiClient>()
+            .ConfigureHttpClient(c => c.BaseAddress = new Uri("https://pokeapi.co/api/v2"));
+        
+        var serviceProvider = services.BuildServiceProvider();
+        _pokeApiClient = serviceProvider.GetRequiredService<IPokeApiClient>();
+
         Func<string, ILambdaContext, string> handler = FunctionHandler;
         await LambdaBootstrapBuilder.Create(handler, new SourceGeneratorLambdaJsonSerializer<LambdaFunctionJsonSerializerContext>())
             .Build()
