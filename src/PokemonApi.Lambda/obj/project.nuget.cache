@@ -1,9 +1,10 @@
 {
   "version": 2,
-  "dgSpecHash": "f+5KjixykEc=",
+  "dgSpecHash": "3uShgiU0cj0=",
   "success": true,
   "projectFilePath": "C:\\repos\\R\\PokemonApi.Lambda\\src\\PokemonApi.Lambda\\PokemonApi.Lambda.csproj",
   "expectedPackageFiles": [
+    "C:\\Users\\Software\\.nuget\\packages\\amazon.lambda.apigatewayevents\\2.7.1\\amazon.lambda.apigatewayevents.2.7.1.nupkg.sha512",
     "C:\\Users\\Software\\.nuget\\packages\\amazon.lambda.core\\2.7.0\\amazon.lambda.core.2.7.0.nupkg.sha512",
     "C:\\Users\\Software\\.nuget\\packages\\amazon.lambda.runtimesupport\\1.13.1\\amazon.lambda.runtimesupport.1.13.1.nupkg.sha512",
     "C:\\Users\\Software\\.nuget\\packages\\amazon.lambda.serialization.systemtextjson\\2.4.4\\amazon.lambda.serialization.systemtextjson.2.4.4.nupkg.sha512",

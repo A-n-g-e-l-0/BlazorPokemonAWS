@@ -1,67 +1,79 @@
+using Amazon.Lambda.APIGatewayEvents;
 using Amazon.Lambda.Core;
-using Amazon.Lambda.RuntimeSupport;
-using Amazon.Lambda.Serialization.SystemTextJson;
-using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
+using PokemonApi.Lambda.Models; // Asegúrate que el namespace sea correcto
+using PokemonApi.Lambda.Services; // Asegúrate que el namespace sea correcto
 using Refit;
-using PokemonBuscador.Cliente.Services;
+using System.Net;
+using System.Text.Json;
+
+// Ensamblador de Lambda que apunta al manejador de la función.
+[assembly: LambdaSerializer(typeof(Amazon.Lambda.Serialization.SystemTextJson.DefaultLambdaJsonSerializer))]
 
 namespace PokemonApi.Lambda;
 
 public class Function
 {
-    private static IPokeApiClient _pokeApiClient;
+    private static readonly ServiceProvider _serviceProvider;
 
-    private static async Task Main()
+    // Usamos un constructor estático para configurar la inyección de dependencias una sola vez.
+    static Function()
     {
         var services = new ServiceCollection();
-        services.AddRefitClient<IPokeApiClient>()
-            .ConfigureHttpClient(c => c.BaseAddress = new Uri("https://pokeapi.co/api/v2"));
-        
-        var serviceProvider = services.BuildServiceProvider();
-        _pokeApiClient = serviceProvider.GetRequiredService<IPokeApiClient>();
 
-        Func<string, ILambdaContext, string> handler = FunctionHandler;
-        await LambdaBootstrapBuilder.Create(handler, new SourceGeneratorLambdaJsonSerializer<LambdaFunctionJsonSerializerContext>())
-            .Build()
-            .RunAsync();
+        // Configuramos Refit para que apunte a la PokéAPI
+        services.AddRefitClient<IPokeApiClient>()
+                .ConfigureHttpClient(c => c.BaseAddress = new Uri("https://pokeapi.co/api/v2"));
+
+        _serviceProvider = services.BuildServiceProvider();
     }
 
     /// <summary>
-    /// A simple function that takes a string and does a ToUpper.
-    ///
-    /// To use this handler to respond to an AWS event, reference the appropriate package from 
-    /// https://github.com/aws/aws-lambda-dotnet#events
-    /// and change the string input parameter to the desired event type. When the event type
-    /// is changed, the handler type registered in the main method needs to be updated and the LambdaFunctionJsonSerializerContext 
-    /// defined below will need the JsonSerializable updated. If the return type and event type are different then the 
-    /// LambdaFunctionJsonSerializerContext must have two JsonSerializable attributes, one for each type.
-    ///
-    // When using Native AOT extra testing with the deployed Lambda functions is required to ensure
-    // the libraries used in the Lambda function work correctly with Native AOT. If a runtime 
-    // error occurs about missing types or methods the most likely solution will be to remove references to trim-unsafe 
-    // code or configure trimming options. This sample defaults to partial TrimMode because currently the AWS 
-    // SDK for .NET does not support trimming. This will result in a larger executable size, and still does not 
-    // guarantee runtime trimming errors won't be hit. 
+    /// El manejador de nuestra Lambda. Recibe una petición de API Gateway.
     /// </summary>
-    /// <param name="input">The event for the Lambda function handler to process.</param>
-    /// <param name="context">The ILambdaContext that provides methods for logging and describing the Lambda environment.</param>
-    /// <returns></returns>
-    public static string FunctionHandler(string input, ILambdaContext context)
+    public async Task<APIGatewayProxyResponse> FunctionHandler(APIGatewayProxyRequest request, ILambdaContext context)
     {
-        return input.ToUpper();
-    }
-}
+        // Extraemos el nombre del pokémon de la URL (ej: /pokemon/pikachu)
+        if (!request.PathParameters.TryGetValue("name", out var pokemonName))
+        {
+            return CreateResponse(HttpStatusCode.BadRequest, "El nombre del Pokémon es requerido en la URL.");
+        }
 
-/// <summary>
-/// This class is used to register the input event and return type for the FunctionHandler method with the System.Text.Json source generator.
-/// There must be a JsonSerializable attribute for each type used as the input and return type or a runtime error will occur 
-/// from the JSON serializer unable to find the serialization information for unknown types.
-/// </summary>
-[JsonSerializable(typeof(string))]
-public partial class LambdaFunctionJsonSerializerContext : JsonSerializerContext
-{
-    // By using this partial class derived from JsonSerializerContext, we can generate reflection free JSON Serializer code at compile time
-    // which can deserialize our class and properties. However, we must attribute this class to tell it what types to generate serialization code for.
-    // See https://docs.microsoft.com/en-us/dotnet/standard/serialization/system-text-json-source-generation
+        context.Logger.LogInformation($"Buscando al Pokémon: {pokemonName}");
+
+        try
+        {
+            // Obtenemos el cliente API del contenedor de servicios
+            var pokeApiClient = _serviceProvider.GetRequiredService<IPokeApiClient>();
+
+            // Llamamos a la PokéAPI
+            var pokemon = await pokeApiClient.GetPokemonAsync(pokemonName.ToLower());
+
+            return CreateResponse(HttpStatusCode.OK, JsonSerializer.Serialize(pokemon));
+        }
+        catch (ApiException ex)
+        {
+            context.Logger.LogError($"Error de la API de Pokémon: {ex.Message}");
+            return CreateResponse(ex.StatusCode, $"No se encontró el Pokémon '{pokemonName}'.");
+        }
+        catch (Exception ex)
+        {
+            context.Logger.LogError($"Error inesperado: {ex.Message}");
+            return CreateResponse(HttpStatusCode.InternalServerError, "Ocurrió un error inesperado.");
+        }
+    }
+
+    private APIGatewayProxyResponse CreateResponse(HttpStatusCode statusCode, string body)
+    {
+        return new APIGatewayProxyResponse
+        {
+            StatusCode = (int)statusCode,
+            Body = body,
+            Headers = new Dictionary<string, string>
+            {
+                { "Content-Type", "application/json" },
+                { "Access-Control-Allow-Origin", "*" } // CORS para permitir llamadas desde nuestra app
+            }
+        };
+    }
 }
